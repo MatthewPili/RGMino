@@ -1,0 +1,183 @@
+#include <GSM.h>
+#include <LiquidCrystal_I2C.h>
+
+#define PINNUMBER ""
+
+GSM gsmAccess;
+GSM_SMS sms;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+char senderNumber[20];
+bool acceso = false;
+String messaggio;
+char c;
+int count;
+double litri;
+
+
+void setup()
+{
+  lcd.begin();
+  lcd.backlight();
+  Serial.begin(9600);
+  connectToGSM();
+  pinMode(2, INPUT);
+  pinMode(8, OUTPUT); //Elettrovalvola
+  pinMode(12, OUTPUT); //motore
+  pinMode(13, OUTPUT);
+  attachInterrupt (0, calcolaLitri, RISING);
+  lcd.print("Inizializzando..");
+
+  
+  
+  
+}
+
+void loop()
+{
+  sms.remoteNumber(senderNumber, 20);
+  if (sms.available())
+  {
+    while (c = sms.read())
+    {
+      messaggio = messaggio + c;
+    }
+    if (messaggio.equals("On"))
+    {
+      if (acceso == true)
+      {
+        lcd.clear();
+        lcd.print("Gia' acceso");
+      }
+      else
+      {
+        accendi();
+      }
+    }
+    else if (messaggio.equals("Off"))
+    {
+      if (acceso == true)
+      {
+        spegni();
+      }
+      else
+      {
+        lcd.clear();
+        lcd.print("Gia' spento");
+      }
+    }
+    else
+    {
+      Serial.println("ERRORE ");
+    }
+    sms.flush();
+  }
+  sms.flush();
+  delay(1000);
+}
+
+
+void calcolaLitri()
+{
+  count = count + 1;
+}
+void accendi()
+{
+  lcd.clear();
+  lcd.print("Accensione");
+  digitalWrite(8, HIGH);
+  delay(1000);
+  digitalWrite(12, HIGH);
+  lcd.clear();
+  lcd.print("Acceso.");
+  acceso = true;
+  interrupts();
+  delay(3000);
+  litri= count / 630;
+  delay(1000);
+  messaggio="";
+}
+
+
+void spegni()
+{
+  lcd.clear();
+  lcd.print("Spegnimento.");
+  digitalWrite(12, LOW);
+  delay(1000);
+  digitalWrite(8, LOW);
+  lcd.clear();
+  lcd.print("Spento");
+  acceso = false;
+  sendSMS();
+  messaggio="";
+}
+
+void sendSMS()
+{
+
+
+  String smsText;
+
+    smsText="Sono stati erogati "+smsText + litri +" litri";
+    //smsText= smsText + litri + " litri";
+
+   
+  lcd.clear();
+  lcd.print("Invio messaggio");
+
+  
+  //char remoteNumb[20]="3924946477";
+  char remoteNumb[20]="3468168174";
+
+  sms.beginSMS(remoteNumb);
+  sms.print(smsText);
+  sms.endSMS();
+
+  delay (1000);
+  lcd.clear();
+  lcd.print("Invio eseguito.");
+
+
+    delay(5000);
+  lcd.clear();
+  lcd.print("In attesa di sms");
+}
+
+
+
+void connectToGSM(){
+  unsigned long myTimeout = 30000; // YOUR LIMIT IN MILLISECONDS 
+  boolean notConnected = true;
+  unsigned long timeConnect = millis();
+
+  lcd.clear();
+  lcd.print("Inizializzando");
+  
+  theGSM3ShieldV1ModemCore.println("AT");
+  
+  gsmAccess.begin(PINNUMBER,true,false); //Use async mode and requires that GSM debug mode has been set on GSM object creation
+  
+  while(notConnected) 
+  {
+    int ok = 0;
+    gsmAccess.ready(); //Call this if debugging is on. Otherwise we will never reach GSM_READY...?!?
+    
+    delay(1000); //might not call ready too often.??? See GSM3ShieldV1AccessProvider.cpp, GSM3ShieldV1AccessProvider::begin
+    ok = gsmAccess.getStatus();
+    
+    if (ok != GSM_READY){
+      
+    } 
+    else {
+      notConnected = false;
+    }
+  }
+
+  lcd.clear();
+  if(notConnected)
+    lcd.print("Errore gsm");
+  else
+    lcd.print("In attesa di sms");
+  delay(5000);  
+}
